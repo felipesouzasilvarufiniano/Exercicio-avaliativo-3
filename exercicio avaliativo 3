@@ -1,0 +1,112 @@
+<?php
+// Conexão com SQLite
+$dbPath = __DIR__ . '/dados.db';
+$pdo = new PDO("sqlite:$dbPath");
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+// Criar tabela
+$pdo->exec("CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    email TEXT NOT NULL
+)");
+
+// Se veio com ID (edição), busca dados para preencher o formulário
+$editando = false;
+$usuarioEdicao = ['id' => '', 'nome' => '', 'email' => ''];
+if (isset($_GET['editar'])) {
+    $editando = true;
+    $idEditar = (int) $_GET['editar'];
+    $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE id = ?");
+    $stmt->execute([$idEditar]);
+    $usuarioEdicao = $stmt->fetch(PDO::FETCH_ASSOC) ?? $usuarioEdicao;
+}
+
+// Deletar usuário
+if (isset($_GET['deletar'])) {
+    $idDeletar = (int) $_GET['deletar'];
+    $stmt = $pdo->prepare("DELETE FROM usuarios WHERE id = ?");
+    $stmt->execute([$idDeletar]);
+    
+    // Redirecionar após deletar
+    header("Location: " . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+// Inserir ou atualizar
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $id = $_POST['id'] ?? '';
+    $nome = $_POST['nome'] ?? '';
+    $email = $_POST['email'] ?? '';
+
+    if ($id) {
+        // Atualizar
+        $stmt = $pdo->prepare("UPDATE usuarios SET nome = ?, email = ? WHERE id = ?");
+        $stmt->execute([$nome, $email, $id]);
+    } else {
+        // Inserir novo
+        $stmt = $pdo->prepare("INSERT INTO usuarios (nome, email) VALUES (?, ?)");
+        $stmt->execute([$nome, $email]);
+    }
+
+    // Redirecionar para limpar o formulário e evitar reenvio
+    header("Location: " . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+// Buscar todos os usuários
+$usuarios = $pdo->query("SELECT * FROM usuarios")->fetchAll(PDO::FETCH_ASSOC);
+?>
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Usuários</title>
+</head>
+<body>
+    <h1>Gerenciar Usuários</h1>
+
+    <form method="POST">
+        <input type="hidden" name="id" value="<?= htmlspecialchars($usuarioEdicao['id']) ?>">
+
+        <label for="nome">Nome:</label>
+        <input type="text" name="nome" value="<?= htmlspecialchars($usuarioEdicao['nome']) ?>" required>
+
+        <label for="email">Email:</label>
+        <input type="email" name="email" value="<?= htmlspecialchars($usuarioEdicao['email']) ?>" required>
+
+        <input type="submit" value="<?= $editando ? "Atualizar" : "Salvar" ?>">
+
+        <?php if ($editando): ?>
+            <a href="<?= $_SERVER['PHP_SELF'] ?>">Cancelar</a>
+        <?php endif; ?>
+    </form>
+
+    <h2>Lista de Usuários</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Email</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($usuarios as $usuario): ?>
+                <tr>
+                    <td><?= htmlspecialchars($usuario['id']) ?></td>
+                    <td><?= htmlspecialchars($usuario['nome']) ?></td>
+                    <td><?= htmlspecialchars($usuario['email']) ?></td>
+                    <td>
+                        <a href="?editar=<?= $usuario['id'] ?>">Editar</a>
+                        <a href="?deletar=<?= $usuario['id'] ?>" onclick="return confirm('Tem certeza que deseja deletar este usuário?')" style="margin-left: 10px; color: red;">Deletar</a>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</body>
+</html>
